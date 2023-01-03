@@ -14,9 +14,64 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
+#include "MLX90640_I2C_Driver.h"
+#include "MLX90640_API.h"
 
-#define MLX90640_ADDR	0x33
-#define MLX90641_ADDR	0x33
+#define MLX90640_ADDR		0x33
+#define MLX90641_ADDR		0x33
+#define MLX_ID1_ADDR		0x2407
+#define MLX_EEPROM_SIZE		1664
+#define TA_SHIFT 			8
+#define STARTUP_DELAY_MS	80
+
+/*MLX90640 Refresh Rate Selector*/
+#define MLX_RATE_SELECT_4HZ
+#ifdef MLX_RATE_SELECT_05HZ
+#define MLX_REFRESH_RATE	0x00
+#define MLX_DELAY_DIV		0.5
+#endif
+#ifdef MLX_RATE_SELECT_1HZ
+#define MLX_REFRESH_RATE	0x01
+#define MLX_DELAY_DIV		1
+#endif
+#ifdef MLX_RATE_SELECT_2HZ
+#define MLX_REFRESH_RATE	0x02
+#define MLX_DELAY_DIV		2
+#endif
+#ifdef MLX_RATE_SELECT_4HZ
+#define MLX_REFRESH_RATE	0x03
+#define MLX_DELAY_DIV		4
+#endif
+#ifdef MLX_RATE_SELECT_8HZ
+#define MLX_REFRESH_RATE	0x04
+#define MLX_DELAY_DIV		8
+#endif
+#ifdef MLX_RATE_SELECT_16HZ
+#define MLX_REFRESH_RATE	0x05
+#define MLX_DELAY_DIV		16
+#endif
+#ifdef MLX_RATE_SELECT_32HZ
+#define MLX_REFRESH_RATE	0x06
+#define MLX_DELAY_DIV		32
+#endif
+#ifdef MLX_RATE_SELECT_64HZ
+#define MLX_REFRESH_RATE	0x07
+#define MLX_DELAY_DIV		64
+#endif
+
+typedef struct thermal_image_data
+{
+	paramsMLX90640 mlx90640_config;
+	float mlx90640To[768];
+	uint16_t mlx90640Frame[834];
+	float vdd;
+	float Ta;
+	float tr;
+	float emissivity;
+	uint8_t subpage;
+	uint16_t device_id[3];
+
+}thermal_image_t;
 
 extern TaskHandle_t thermal_imaging_task_handle;
 

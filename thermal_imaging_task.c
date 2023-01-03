@@ -9,24 +9,26 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "thermal_imaging_task.h"
-#include "MLX90640_I2C_Driver.h"
-#include "MLX90640_API.h"
 
 /*Imported I2C Device Global Variables*/
 extern cyhal_i2c_t I2C_scb3;
 extern cyhal_i2c_cfg_t i2c_scb3_cfg;
 
+/*Thermal Imaging Task Handles*/
 TaskHandle_t thermal_imaging_task_handle = NULL;
 extern SemaphoreHandle_t i2c_mutex;
 
-float mlx90640To[768];
-paramsMLX90640 mlx90640;
+/*The MLX90640 Data Storage*/
+thermal_image_t mlx90640 =
+{
+		.emissivity = 0.95
+};
 
 void thermal_imaging_task(void *param)
 {
 	(void) param;
 	int err = MLX90640_NO_ERROR;
-	int status;
+	int status = MLX90640_NO_ERROR;
 	uint16_t *eeMLX90640 = NULL;
 
 	printf("thermal imaging task has started.\r\n");
@@ -34,27 +36,29 @@ void thermal_imaging_task(void *param)
 	/*Initialize the thermal imaging sensor*/
 	MLX90640_I2CInit();
 	MLX90640_I2CGeneralReset();
+	memset(mlx90640.mlx90640Frame, 0x00, sizeof(mlx90640.mlx90640Frame));
+	memset(mlx90640.mlx90640To, 0x00, sizeof(mlx90640.mlx90640To));
+	memset(&mlx90640.mlx90640_config, 0x00, sizeof(mlx90640.mlx90640_config));
 
 	/*Read the device ID*/
-	uint16_t device_id[3] = {0};
-	err = MLX90640_I2CRead(MLX90640_ADDR, 0x2407, 3, device_id);
+	err = MLX90640_I2CRead(MLX90640_ADDR, MLX_ID1_ADDR, 3, mlx90640.device_id);
 	if(err != MLX90640_NO_ERROR)
 	{
 		printf("MLX9064x device read ID failed.\r\n");
 		CY_ASSERT(0);
 	}
     printf("MLX9064x device is online, the serial number is: " );
-    printf("0x%X", device_id[0]);
-    printf("%X", device_id[1]);
-    printf("%X\r\n", device_id[2]);
+    printf("0x%X", mlx90640.device_id[0]);
+    printf("%X", mlx90640.device_id[1]);
+    printf("%X\r\n", mlx90640.device_id[2]);
 
-	/*Allocate memory for eeprom storage*/
-    eeMLX90640 = malloc(832*2);
+	/*Allocate memory for EEPROM data storage*/
+    eeMLX90640 = malloc(MLX_EEPROM_SIZE);
     if(eeMLX90640 == NULL)
     {
     	CY_ASSERT(0);
     }
-    memset(eeMLX90640, 0x00, 832*2);
+    memset(eeMLX90640, 0x00, MLX_EEPROM_SIZE);
 
     /*Get device parameters - We only have to do this once*/
     status = MLX90640_DumpEE(MLX90640_ADDR, eeMLX90640);
@@ -62,18 +66,58 @@ void thermal_imaging_task(void *param)
     {
     	printf("Failed to load system parameters.\r\n");
     }
-    status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640);
+    status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640.mlx90640_config);
     if (status != 0)
     {
     	printf("Parameter extraction failed.\r\n");
     }
 
-    /*Free the allocated memory*/
+    /*Free the EEPROM data storage*/
     free(eeMLX90640);
+    eeMLX90640 = NULL;
 
+    /*Set the refresh rate*/
+    MLX90640_SetRefreshRate(MLX90640_ADDR, MLX_REFRESH_RATE);
+
+	/*POR Delay*/
+	vTaskDelay(pdMS_TO_TICKS(STARTUP_DELAY_MS));
 
 	for(;;)
-	{}
+	{
+		/*Read the data and do the math*/
+		for (uint8_t i = 0 ; i < 2 ; i++)
+		{
+			/*Wait for refresh rate (ms)*/
+			vTaskDelay(pdMS_TO_TICKS(1000/MLX_DELAY_DIV));
+
+		    status = MLX90640_GetFrameData(MLX90640_ADDR, mlx90640.mlx90640Frame);
+		    if(status == 0)
+		    {
+		    	/*Subpage 0 data*/
+		    	cyhal_gpio_toggle(LED1);
+		    	mlx90640.subpage = status;
+		    }
+		    else if(status == 1)
+		    {
+
+		    	/*Subpage 1 data*/
+		    	cyhal_gpio_toggle(LED1);
+		    	mlx90640.subpage = status;
+		    }
+		    else
+		    {
+		    	/*Error*/
+		    	cyhal_gpio_write((cyhal_gpio_t)LED1, CYBSP_LED_STATE_OFF);
+		    	continue;
+		    }
+
+		    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config);
+		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config);
+		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
+		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
+		}
+
+	}
 }
 
 void MLX90640_I2CInit(void)
