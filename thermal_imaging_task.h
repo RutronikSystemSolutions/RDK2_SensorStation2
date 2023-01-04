@@ -61,7 +61,7 @@
 
 typedef struct thermal_image_data
 {
-	paramsMLX90640 mlx90640_config;
+	paramsMLX90640 mlx90640Config;
 	float mlx90640To[768];
 	uint16_t mlx90640Frame[834];
 	float vdd;

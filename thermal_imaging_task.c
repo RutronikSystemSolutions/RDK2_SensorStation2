@@ -38,7 +38,7 @@ void thermal_imaging_task(void *param)
 	MLX90640_I2CGeneralReset();
 	memset(mlx90640.mlx90640Frame, 0x00, sizeof(mlx90640.mlx90640Frame));
 	memset(mlx90640.mlx90640To, 0x00, sizeof(mlx90640.mlx90640To));
-	memset(&mlx90640.mlx90640_config, 0x00, sizeof(mlx90640.mlx90640_config));
+	memset(&mlx90640.mlx90640Config, 0x00, sizeof(mlx90640.mlx90640Config));
 
 	/*Read the device ID*/
 	err = MLX90640_I2CRead(MLX90640_ADDR, MLX_ID1_ADDR, 3, mlx90640.device_id);
@@ -66,7 +66,7 @@ void thermal_imaging_task(void *param)
     {
     	printf("Failed to load system parameters.\r\n");
     }
-    status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640.mlx90640_config);
+    status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640.mlx90640Config);
     if (status != 0)
     {
     	printf("Parameter extraction failed.\r\n");
@@ -87,7 +87,7 @@ void thermal_imaging_task(void *param)
 		/*Read the data and do the math*/
 		for (uint8_t i = 0 ; i < 2 ; i++)
 		{
-			/*Wait for refresh rate (ms)*/
+			/*Delay determined by the refresh rate*/
 			vTaskDelay(pdMS_TO_TICKS(1000/MLX_DELAY_DIV));
 
 		    status = MLX90640_GetFrameData(MLX90640_ADDR, mlx90640.mlx90640Frame);
@@ -111,10 +111,10 @@ void thermal_imaging_task(void *param)
 		    	continue;
 		    }
 
-		    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config);
-		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config);
+		    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
+		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
 		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
-		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640_config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
+		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
 		}
 
 	}
