@@ -141,18 +141,16 @@
 	int WriteI2C_Bus(struct TransferData *Data)
 	{
 		cy_rslt_t result;
+		uint8_t i2c_data[3] = {0};
 
 		#ifndef FREERTOS_APP
 		return -1; //Not implemented
 		#else
 		xSemaphoreTake(i2c_mutex, portMAX_DELAY);
-		result = cyhal_i2c_master_write( &I2C_scb3, (uint16_t)*Data->Slave_Address, Data->RegisterAddress, 1, 10, false );
-		if (result != CY_RSLT_SUCCESS)
-		{
-			xSemaphoreGive(i2c_mutex);
-			return -1;
-		}
-		result = cyhal_i2c_master_write( &I2C_scb3, (uint16_t)*Data->Slave_Address, Data->WData, *Data->length, 10, true );
+		i2c_data[0] = Data->RegisterAddress;
+		i2c_data[1] = Data->WData[0];
+		i2c_data[2] = Data->WData[1];
+		result = cyhal_i2c_master_write( &I2C_scb3, (uint16_t)Data->Slave_Address, i2c_data, 3, 10, true );
 		if (result != CY_RSLT_SUCCESS)
 		{
 			xSemaphoreGive(i2c_mutex);
@@ -168,6 +166,29 @@
 	//The function returns 0 upon completion.
 	int ReadI2C_Bus(struct TransferData *Data)
 	{
+		cy_rslt_t result;
+
+		#ifndef FREERTOS_APP
+		return -1; //Not implemented
+		#else
+
+		xSemaphoreTake(i2c_mutex, portMAX_DELAY);
+
+		result = cyhal_i2c_master_write( &I2C_scb3, (uint16_t)Data->Slave_Address, &Data->RegisterAddress, 1, 10, false );
+		if (result != CY_RSLT_SUCCESS)
+		{
+			xSemaphoreGive(i2c_mutex);
+			return -1;
+		}
+		result = cyhal_i2c_master_read( &I2C_scb3, (uint16_t)Data->Slave_Address, Data->RData, 2, 10, true );
+		if (result != CY_RSLT_SUCCESS)
+		{
+			xSemaphoreGive(i2c_mutex);
+			return -1;
+		}
+		xSemaphoreGive(i2c_mutex);
+		#endif
+
 		return 0;
 	}
 
