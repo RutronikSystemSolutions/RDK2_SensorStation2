@@ -196,6 +196,24 @@
 	//The function returns 0 upon completion.
 	int ReadI2C_Bus_Gesture_Mode(struct GestureTransferData *Data)
 	{
+		cy_rslt_t result;
+
+		#ifndef FREERTOS_APP
+		return -1; //Not implemented
+		#else
+
+		xSemaphoreTake(i2c_mutex, portMAX_DELAY);
+
+		result = cyhal_i2c_master_read( &I2C_scb3, (uint16_t)Data->Slave_Address, Data->RData, 6, 10, true );
+		if (result != CY_RSLT_SUCCESS)
+		{
+			xSemaphoreGive(i2c_mutex);
+			return -1;
+		}
+		xSemaphoreGive(i2c_mutex);
+
+		#endif
+
 		return 0;
 	}
 #endif

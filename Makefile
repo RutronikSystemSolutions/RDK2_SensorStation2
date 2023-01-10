@@ -128,7 +128,7 @@ ASFLAGS=
 LDFLAGS += -Wl,--undefined=uxTopUsedPriority
 
 # Additional / custom libraries to link in to the application.
-LDLIBS=
+LDLIBS=./arm_dsp_lib/libarm_cortexM4lf_math.a
 
 # Path to the linker script to use (if empty, use the default linker script).
 LINKER_SCRIPT=

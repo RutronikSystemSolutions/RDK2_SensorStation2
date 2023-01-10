@@ -10,7 +10,6 @@
 #include "VCNL4035X01_Prototypes.h"
 #include "VCNL4035X01.h"
 #include "I2C_Functions.h"
-#include "VCNL4035X01_Application_Library.h"
 
 
 extern int I2C_Bus;
