@@ -12,20 +12,6 @@
 #include "I2C_Functions.h"
 #include "arm_math.h"
 
-#define GESTURE_FRAME_SIZE	10
-#define GESTURE_FRAME_SKIP	40
-#define MOV_AVERAGE			2
-
-#define STD_DEBUG_EN		0
-#define LFT_RHT_DEBUG_EN	1
-#define LFT_UP_DEBUG_EN		1
-#define RHT_UP_DEBUG_EN		1
-
-#define STD_THRESHOLD		50
-#define LFT_RHT_DELAY_TH	0
-#define LFT_UP_DELAY_TH		0
-#define RHT_UP_DELAY_TH		0
-
 
 /*Gesture Control Task Handles*/
 TaskHandle_t gesture_control_task_handle = NULL;
@@ -64,17 +50,6 @@ int buff_pos_3 = 0;
 long sum_3 = 0;
 
 /*Gesture Frames Global Storage*/
-typedef struct gesture_data
-{
-	float sensor1[GESTURE_FRAME_SIZE];
-	float sensor2[GESTURE_FRAME_SIZE];
-	float sensor3[GESTURE_FRAME_SIZE];
-	int buff_pos;
-	float std_left;
-	float std_up;
-	float std_right;
-	float crosscorr[GESTURE_FRAME_SIZE * 2 - 1];
-}gesture_data_t;
 gesture_data_t gesture_data =
 {
 		.sensor1 = {0},
@@ -84,11 +59,9 @@ gesture_data_t gesture_data =
 		.std_left = 0,
 		.std_up = 0,
 		.std_right = 0,
-		.crosscorr = {0}
+		.crosscorr = {0},
+		.gesture = GESTURE_NONE //currently recognized gesture
 };
-
-/*Gesture Recognition Function Prototype*/
- void GestureRecognition(int *sensor1, int *sensor2, int *sensor3);
 
 void gesture_control_task(void *param)
 {
@@ -147,6 +120,7 @@ void gesture_control_task(void *param)
     	/* Read Gesture Data */
     	if(Gesture_Data_Ready)
     	{
+    		/*Read the gesture data from the VCNL4035X01*/
     		VCNL4035X01_GET_Gesture_Mode_Data(&Data1, &Data2, &Data3);
 
     	    /*Do the moving average math for the sensor 1*/
@@ -182,6 +156,7 @@ void gesture_control_task(void *param)
     	if(gesture_data.buff_pos == GESTURE_FRAME_SIZE)
     	{
     		gesture_data.buff_pos = 0;
+    		gesture_data.gesture = GESTURE_NONE;
 
     		/*If no frames requested to skip*/
     		if(!frames_to_skip)
@@ -204,11 +179,12 @@ void gesture_control_task(void *param)
 
         			/*Left Right Cross-Correlation*/
             		arm_correlate_f32(gesture_data.sensor1, GESTURE_FRAME_SIZE, gesture_data.sensor2, GESTURE_FRAME_SIZE, gesture_data.crosscorr);
-            		arm_max_f32 (gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
+            		arm_max_f32(gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
             		left_right_delay = value_index - (GESTURE_FRAME_SIZE - 1);
             		if(left_right_delay < LFT_RHT_DELAY_TH)
             		{
             			frames_to_skip = GESTURE_FRAME_SKIP;
+            			gesture_data.gesture = GESTURE_RIGHT;
 
     					#if LFT_RHT_DEBUG_EN
             			printf("Right %d \r\n", left_right_delay);
@@ -217,6 +193,7 @@ void gesture_control_task(void *param)
             		else if (left_right_delay > LFT_RHT_DELAY_TH)
             		{
             			frames_to_skip = GESTURE_FRAME_SKIP;
+            			gesture_data.gesture = GESTURE_LEFT;
 
     					#if LFT_RHT_DEBUG_EN
             			printf("Left %d \r\n", left_right_delay);
@@ -226,11 +203,12 @@ void gesture_control_task(void *param)
             		else
             		{
                 		arm_correlate_f32(gesture_data.sensor1, GESTURE_FRAME_SIZE, gesture_data.sensor3, GESTURE_FRAME_SIZE, gesture_data.crosscorr);
-                		arm_max_f32 (gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
+                		arm_max_f32(gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
                 		left_up_delay = value_index - (GESTURE_FRAME_SIZE - 1);
                 		if(left_up_delay > LFT_UP_DELAY_TH)
                 		{
                 			frames_to_skip = GESTURE_FRAME_SKIP;
+                			gesture_data.gesture = GESTURE_DOWN;
 
         					#if LFT_UP_DEBUG_EN
                 			printf("Down %d \r\n", left_up_delay);
@@ -239,6 +217,7 @@ void gesture_control_task(void *param)
                 		else if (left_up_delay < LFT_UP_DELAY_TH)
                 		{
                 			frames_to_skip = GESTURE_FRAME_SKIP;
+                			gesture_data.gesture = GESTURE_UP;
 
         					#if LFT_UP_DEBUG_EN
                 			printf("Up %d \r\n", left_up_delay);
@@ -248,11 +227,12 @@ void gesture_control_task(void *param)
                 		else
                 		{
                     		arm_correlate_f32(gesture_data.sensor2, GESTURE_FRAME_SIZE, gesture_data.sensor3, GESTURE_FRAME_SIZE, gesture_data.crosscorr);
-                    		arm_max_f32 (gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
+                    		arm_max_f32(gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
                     		right_up_delay = value_index - (GESTURE_FRAME_SIZE - 1);
                     		if(right_up_delay > RHT_UP_DELAY_TH)
                     		{
                     			frames_to_skip = GESTURE_FRAME_SKIP;
+                    			gesture_data.gesture = GESTURE_DOWN;
 
             					#if RHT_UP_DEBUG_EN
                     			printf("Down %d \r\n", right_up_delay);
@@ -261,10 +241,15 @@ void gesture_control_task(void *param)
                     		else if (right_up_delay < RHT_UP_DELAY_TH)
                     		{
                     			frames_to_skip = GESTURE_FRAME_SKIP;
+                    			gesture_data.gesture = GESTURE_UP;
 
             					#if RHT_UP_DEBUG_EN
                     			printf("Up %d \r\n", right_up_delay);
             					#endif
+                    		}
+                    		else
+                    		{
+                    			gesture_data.gesture = GESTURE_NONE;
                     		}
                 		}
             		}
@@ -513,9 +498,4 @@ float MovingAvg(int *ptrArrNumbers, long *ptrSum, int pos, int len, int nextNum)
 
   /*Return the average*/
   return *ptrSum / len;
-}
-
-void GestureRecognition(int *sensor1, int *sensor2, int *sensor3)
-{
-
 }
