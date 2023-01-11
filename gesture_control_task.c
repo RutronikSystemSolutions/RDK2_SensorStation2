@@ -15,6 +15,12 @@
 #define GESTURE_FRAME_SIZE	10
 #define MOV_AVERAGE			2
 
+#define STD_DEBUG_EN		0
+
+#define STD_THRESHOLD		50
+#define LFT_RHT_DELAY_TH	0
+
+
 /*Gesture Control Task Handles*/
 TaskHandle_t gesture_control_task_handle = NULL;
 
@@ -61,6 +67,7 @@ typedef struct gesture_data
 	float std_left;
 	float std_up;
 	float std_right;
+	float crosscorr[GESTURE_FRAME_SIZE * 2 - 1];
 }gesture_data_t;
 gesture_data_t gesture_data =
 {
@@ -70,7 +77,8 @@ gesture_data_t gesture_data =
 		.buff_pos = 0,
 		.std_left = 0,
 		.std_up = 0,
-		.std_right = 0
+		.std_right = 0,
+		.crosscorr = {0}
 };
 
 /*Gesture Recognition Function Prototype*/
@@ -85,6 +93,10 @@ void gesture_control_task(void *param)
 	float sens_av_1 = 0;
 	float sens_av_2 = 0;
 	float sens_av_3 = 0;
+
+	float max_value = 0;
+	uint32_t value_index = 0;
+	int left_right_delay = 0;
 
 	printf("gesture control task has started.\r\n");
 
@@ -152,18 +164,39 @@ void gesture_control_task(void *param)
     	    }
     	}
 
-    	/*Frame buffer is full*/
+    	/* Frame buffer is full, do the data processing. */
     	if(gesture_data.buff_pos == GESTURE_FRAME_SIZE)
     	{
     		gesture_data.buff_pos = 0;
+
+    		/*Calculate the standard deviation of all sensor frames*/
     		arm_std_f32(gesture_data.sensor1, GESTURE_FRAME_SIZE, &gesture_data.std_left);
     		arm_std_f32(gesture_data.sensor2, GESTURE_FRAME_SIZE, &gesture_data.std_right);
     		arm_std_f32(gesture_data.sensor3, GESTURE_FRAME_SIZE, &gesture_data.std_up);
 
-
+			#if STD_DEBUG_EN
+    		/*Print standard deviation data*/
     		printf("Left: %.2f\r\n ", gesture_data.std_left);
     		printf("Up: %.2f\r\n ", gesture_data.std_up);
     		printf("Right: %.2f\r\n\r\n", gesture_data.std_right);
+			#endif
+
+    		if((gesture_data.std_left >= STD_THRESHOLD) || (gesture_data.std_right >= STD_THRESHOLD) || (gesture_data.std_up >= STD_THRESHOLD))
+    		{
+
+        		arm_correlate_f32(gesture_data.sensor1, GESTURE_FRAME_SIZE, gesture_data.sensor2, GESTURE_FRAME_SIZE, gesture_data.crosscorr);
+        		arm_max_f32 (gesture_data.crosscorr, GESTURE_FRAME_SIZE*2-1, &max_value, &value_index);
+        		left_right_delay = value_index - (GESTURE_FRAME_SIZE - 1);
+        		if(left_right_delay < LFT_RHT_DELAY_TH)
+        		{
+        			printf("Right %d \r\n", left_right_delay);
+        		}
+        		else if (left_right_delay > LFT_RHT_DELAY_TH)
+        		{
+        			printf("Left %d \r\n", left_right_delay);
+        		}
+
+    		}
 
     		cyhal_gpio_toggle(LED2);
     	}
