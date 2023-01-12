@@ -7,6 +7,7 @@
 
 #include "VCNL4035X01.h"
 #include "VCNL4035X01_Prototypes.h"
+#include "pca9554_app.h"
 #include "typedefinition.h"
 #include "gesture_control_task.h"
 #include "I2C_Functions.h"
@@ -66,6 +67,7 @@ gesture_data_t gesture_data =
 void gesture_control_task(void *param)
 {
 	(void) param;
+	cy_rslt_t result;
 	Word vcnl4035x01_ID = 0;
 	Word Data1,Data2,Data3 = 0;
 	_Bool Gesture_Data_Ready = false;
@@ -82,6 +84,16 @@ void gesture_control_task(void *param)
 	uint32_t frames_to_skip = 0;
 
 	printf("gesture control task has started.\r\n");
+
+	/*Configure the PCA9554 GPIO Expander*/
+	result = pca9554_configure();
+    if (result != CY_RSLT_SUCCESS)
+    {
+    	printf("PCA9554 GPIO expander failure.\r\n");
+    	CY_ASSERT(0);
+    }
+    /*Initial LED Direction*/
+    pca9554_dir_set(PCA9554_DIR_NONE);
 
     /* Reset Sensor to default value */
 	Reset_Sensor();
@@ -157,6 +169,7 @@ void gesture_control_task(void *param)
     	{
     		gesture_data.buff_pos = 0;
     		gesture_data.gesture = GESTURE_NONE;
+    		pca9554_dir_set(PCA9554_DIR_NONE);
 
     		/*If no frames requested to skip*/
     		if(!frames_to_skip)
@@ -185,6 +198,7 @@ void gesture_control_task(void *param)
             		{
             			frames_to_skip = GESTURE_FRAME_SKIP;
             			gesture_data.gesture = GESTURE_RIGHT;
+            			pca9554_dir_set(PCA9554_DIR_RIGHT);
 
     					#if LFT_RHT_DEBUG_EN
             			printf("Right %d \r\n", left_right_delay);
@@ -194,6 +208,7 @@ void gesture_control_task(void *param)
             		{
             			frames_to_skip = GESTURE_FRAME_SKIP;
             			gesture_data.gesture = GESTURE_LEFT;
+            			pca9554_dir_set(PCA9554_DIR_LEFT);
 
     					#if LFT_RHT_DEBUG_EN
             			printf("Left %d \r\n", left_right_delay);
@@ -209,6 +224,7 @@ void gesture_control_task(void *param)
                 		{
                 			frames_to_skip = GESTURE_FRAME_SKIP;
                 			gesture_data.gesture = GESTURE_DOWN;
+                			pca9554_dir_set(PCA9554_DIR_DOWN);
 
         					#if LFT_UP_DEBUG_EN
                 			printf("Down %d \r\n", left_up_delay);
@@ -218,6 +234,7 @@ void gesture_control_task(void *param)
                 		{
                 			frames_to_skip = GESTURE_FRAME_SKIP;
                 			gesture_data.gesture = GESTURE_UP;
+                			pca9554_dir_set(PCA9554_DIR_UP);
 
         					#if LFT_UP_DEBUG_EN
                 			printf("Up %d \r\n", left_up_delay);
@@ -233,6 +250,7 @@ void gesture_control_task(void *param)
                     		{
                     			frames_to_skip = GESTURE_FRAME_SKIP;
                     			gesture_data.gesture = GESTURE_DOWN;
+                    			pca9554_dir_set(PCA9554_DIR_DOWN);
 
             					#if RHT_UP_DEBUG_EN
                     			printf("Down %d \r\n", right_up_delay);
@@ -242,6 +260,7 @@ void gesture_control_task(void *param)
                     		{
                     			frames_to_skip = GESTURE_FRAME_SKIP;
                     			gesture_data.gesture = GESTURE_UP;
+                    			pca9554_dir_set(PCA9554_DIR_UP);
 
             					#if RHT_UP_DEBUG_EN
                     			printf("Up %d \r\n", right_up_delay);
@@ -250,6 +269,7 @@ void gesture_control_task(void *param)
                     		else
                     		{
                     			gesture_data.gesture = GESTURE_NONE;
+                    			pca9554_dir_set(PCA9554_DIR_NONE);
                     		}
                 		}
             		}
