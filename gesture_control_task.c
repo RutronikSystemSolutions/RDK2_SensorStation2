@@ -93,7 +93,7 @@ void gesture_control_task(void *param)
     	CY_ASSERT(0);
     }
     /*Initial LED Direction*/
-    pca9554_dir_set(PCA9554_DIR_NONE);
+    pca9554_dir_set(PCA9554_DIR_LOWER);
 
     /* Reset Sensor to default value */
 	Reset_Sensor();
@@ -117,6 +117,9 @@ void gesture_control_task(void *param)
 
 	/*Gesture Mode Initialize*/
 	Gesture_Mode();
+
+	/*Indicate the progress*/
+	pca9554_dir_set(PCA9554_DIR_UPPER);
 
 	for(;;)
 	{
@@ -435,8 +438,6 @@ void Gesture_Mode()
     //5.) Enable the Gesture Mode
     //Enable/Disable the Gesture Mode
     VCNL4035X01_SET_GESTURE_MODE(VCNL4035X01_PS_GESTURE_MODE_EN);
-
-    //while (I2C_1_MasterStatus()!=I2C_1_MODE_COMPLETE_XFER){}
     vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
