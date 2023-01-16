@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include "thermal_imaging_task.h"
 
+/* Set baud rate to special 1093750 */
+#define ARDU_BAUD_RATE       		1093750
+
 /*Imported I2C Device Global Variables*/
 extern cyhal_i2c_t I2C_scb3;
 extern cyhal_i2c_cfg_t i2c_scb3_cfg;
@@ -24,14 +27,33 @@ thermal_image_t mlx90640 =
 		.emissivity = 0.95
 };
 
+/*Arduino UART object and configuration*/
+cyhal_uart_t ardu_uart;
+
+/*Function prototypes*/
+void ResetDisplay(void);
+cy_rslt_t ardu_uart_init(void);
+
 void thermal_imaging_task(void *param)
 {
 	(void) param;
+	cy_rslt_t result;
 	int err = MLX90640_NO_ERROR;
 	int status = MLX90640_NO_ERROR;
 	uint16_t *eeMLX90640 = NULL;
 
 	printf("thermal imaging task has started.\r\n");
+
+	/*Reset the Display*/
+	ResetDisplay();
+
+    /*Initialize The Arduino UART*/
+    result = ardu_uart_init();
+    if (result != CY_RSLT_SUCCESS)
+    {
+    	printf("Could not initialize Arduino UART.\r\n");
+    	CY_ASSERT(0);
+    }
 
 	/*Initialize the thermal imaging sensor*/
 	MLX90640_I2CInit();
@@ -115,6 +137,16 @@ void thermal_imaging_task(void *param)
 		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
 		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
 		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
+
+		    /*Draw the subpage 0*/
+		    if(status == 0)
+		    {
+
+		    }
+		    else if(status == 1)
+			{
+
+			}
 		}
 
 	}
@@ -234,5 +266,44 @@ int MLX90640_I2CRead(uint8_t slaveAddr,uint16_t startAddress, uint16_t nMemAddre
 	}
 
 	return ret;
+}
+
+cy_rslt_t ardu_uart_init(void)
+{
+	cy_rslt_t result;
+	uint32_t actualbaud;
+
+    /* Initialize the UART configuration structure */
+    const cyhal_uart_cfg_t uart_config =
+    {
+        .data_bits = 8,
+        .stop_bits = 1,
+        .parity = CYHAL_UART_PARITY_NONE,
+        .rx_buffer = NULL,
+        .rx_buffer_size = 0
+    };
+
+    /* Initialize the UART Block */
+    result = cyhal_uart_init(&ardu_uart, ARDU_TX, ARDU_RX, NC, NC, NULL, &uart_config);
+	if (result != CY_RSLT_SUCCESS)
+	{return result;}
+
+	result = cyhal_uart_set_baud(&ardu_uart, ARDU_BAUD_RATE, &actualbaud);
+	if (result != CY_RSLT_SUCCESS)
+	{return result;}
+
+	/*Connect internal pull-up resistor*/
+	cyhal_gpio_configure(ARDU_RX, CYHAL_GPIO_DIR_INPUT, CYHAL_GPIO_DRIVE_PULLUP);
+
+	return result;
+}
+
+/*Reset Display Function*/
+void ResetDisplay(void)
+{
+	cyhal_gpio_write(ARDU_IO8, false);
+	vTaskDelay(pdMS_TO_TICKS(500));
+	cyhal_gpio_write(ARDU_IO8, true);
+	vTaskDelay(pdMS_TO_TICKS(3000));
 }
 
