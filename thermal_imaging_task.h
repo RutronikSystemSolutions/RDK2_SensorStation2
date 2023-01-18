@@ -21,6 +21,7 @@
 #define MLX90641_ADDR		0x33
 #define MLX_ID1_ADDR		0x2407
 #define MLX_EEPROM_SIZE		1664
+#define MLX_PIXELS			768
 #define TA_SHIFT 			8
 #define STARTUP_DELAY_MS	80
 
