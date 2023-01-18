@@ -47,6 +47,9 @@ uint8_t iron_map[] =
 		0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
 };
 
+/*Thermal image*/
+uint8_t thermal_image[768] = {0};
+
 /*Imported I2C Device Global Variables*/
 extern cyhal_i2c_t I2C_scb3;
 extern cyhal_i2c_cfg_t i2c_scb3_cfg;
@@ -68,11 +71,6 @@ cyhal_uart_t ardu_uart;
 void ResetDisplay(void);
 cy_rslt_t ardu_uart_init(void);
 
-float max_temp = 0;
-uint32_t max_temp_index = 0;
-float min_temp = 0;
-uint32_t min_temp_index = 0;
-
 void thermal_imaging_task(void *param)
 {
 	(void) param;
@@ -80,9 +78,15 @@ void thermal_imaging_task(void *param)
 	int err = MLX90640_NO_ERROR;
 	int status = MLX90640_NO_ERROR;
 	uint16_t *eeMLX90640 = NULL;
-
 	int x=0, y=0;
 	uint8_t colour = 0;
+
+	float max_temp = 0;
+	uint32_t max_temp_index = 0;
+	float min_temp = 0;
+	uint32_t min_temp_index = 0;
+	float temp_range = 0;
+	uint32_t iron_map_index = 0;
 
 	printf("thermal imaging task has started.\r\n");
 
@@ -180,10 +184,17 @@ void thermal_imaging_task(void *param)
 		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
 		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
 
+		    /*Calculate & Convert Colour Scale*/
 		    if(mlx90640.subpage == 1)
 		    {
 		    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &max_temp, &max_temp_index);
 		    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &min_temp, &min_temp_index);
+		    	temp_range = max_temp - min_temp;
+		    	for(x = 0; x < 768; x++)
+		    	{
+		    		iron_map_index = temp_range/255 - 1;
+		    		thermal_image[iron_map_index] = mlx90640.mlx90640To[x];
+		    	}
 		    }
 
 	    	cyhal_gpio_toggle(LED1);
