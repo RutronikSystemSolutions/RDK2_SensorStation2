@@ -22,6 +22,9 @@
 #define POSLEFT_CMD					251
 #define POSTOP_CMD					252
 
+#define BITS_UINT8					255
+#define THERMAL_SENSORS				768
+
 /*"Iron map" scale LUT*/
 uint8_t iron_map[] =
 {
@@ -79,14 +82,16 @@ void thermal_imaging_task(void *param)
 	int status = MLX90640_NO_ERROR;
 	uint16_t *eeMLX90640 = NULL;
 	int x=0, y=0;
-	uint8_t colour = 0;
+	uint32_t position = 0;
 
 	float max_temp = 0;
 	uint32_t max_temp_index = 0;
 	float min_temp = 0;
 	uint32_t min_temp_index = 0;
-	float temp_range = 0;
-	uint32_t iron_map_index = 0;
+
+	float scale_unit = 0;
+	float thermal_diff = 0;
+	int32_t iron_map_index = 0;
 
 	printf("thermal imaging task has started.\r\n");
 
@@ -189,11 +194,21 @@ void thermal_imaging_task(void *param)
 		    {
 		    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &max_temp, &max_temp_index);
 		    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &min_temp, &min_temp_index);
-		    	temp_range = max_temp - min_temp;
-		    	for(x = 0; x < 768; x++)
+		    	scale_unit = (max_temp - min_temp)/BITS_UINT8;
+
+		    	for(x = 0; x < THERMAL_SENSORS; x++)
 		    	{
-		    		iron_map_index = temp_range/255 - 1;
-		    		thermal_image[iron_map_index] = mlx90640.mlx90640To[x];
+		    		thermal_diff = mlx90640.mlx90640To[x] - min_temp;
+		    		iron_map_index = thermal_diff/scale_unit - 1;
+		    		if(iron_map_index < 0)
+		    		{
+		    			iron_map_index = 0;
+		    		}
+		    		else if(iron_map_index > 254)
+		    		{
+		    			iron_map_index = 254;
+		    		}
+		    		thermal_image[x] = iron_map[iron_map_index];
 		    	}
 		    }
 
@@ -210,6 +225,7 @@ void thermal_imaging_task(void *param)
 	    	cyhal_uart_putc(&ardu_uart, (POSTOP >> 16) & 0xFF);
 	    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
+	    	position = 0;
 	    	for(y = 0; y < 24; y++)
 	    	{
 	    		for(x = 0; x < 32; x++)
@@ -218,10 +234,8 @@ void thermal_imaging_task(void *param)
 			    	cyhal_uart_putc(&ardu_uart, x);
 			    	cyhal_uart_putc(&ardu_uart, y);
 			    	cyhal_uart_putc(&ardu_uart, 0x20);
-			    	cyhal_uart_putc(&ardu_uart, iron_map[colour]);
-			    	colour++;
-			    	if(colour > 254)
-			    	{colour = 0;}
+			    	cyhal_uart_putc(&ardu_uart, thermal_image[position]);
+			    	position++;
 	    		}
 	    	}
 		}
