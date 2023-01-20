@@ -25,6 +25,8 @@
 #define BITS_UINT8					255
 #define THERMAL_SENSORS				768
 
+#define BUFF_OVF_TOUT_MS			100
+
 /*"Iron map" scale LUT*/
 uint8_t iron_map[] =
 {
@@ -51,7 +53,8 @@ uint8_t iron_map[] =
 };
 
 /*Thermal image*/
-uint8_t thermal_image[768] = {0};
+uint8_t thermal_image[THERMAL_SENSORS] = {0};
+uint8_t thermal_cache[THERMAL_SENSORS] = {0};
 
 /*Imported I2C Device Global Variables*/
 extern cyhal_i2c_t I2C_scb3;
@@ -92,6 +95,8 @@ void thermal_imaging_task(void *param)
 	float scale_unit = 0;
 	float thermal_diff = 0;
 	int32_t iron_map_index = 0;
+
+	uint8_t byte;
 
 	printf("thermal imaging task has started.\r\n");
 
@@ -163,6 +168,7 @@ void thermal_imaging_task(void *param)
 			/*Delay determined by the refresh rate*/
 			vTaskDelay(pdMS_TO_TICKS(1000/MLX_DELAY_DIV));
 
+			frame_check:
 		    status = MLX90640_GetFrameData(MLX90640_ADDR, mlx90640.mlx90640Frame);
 		    if(status == 0)
 		    {
@@ -181,9 +187,11 @@ void thermal_imaging_task(void *param)
 		    {
 		    	/*Error*/
 		    	cyhal_gpio_write((cyhal_gpio_t)LED1, CYBSP_LED_STATE_OFF);
-		    	continue;
+		    	vTaskDelay(pdMS_TO_TICKS(10));
+		    	goto frame_check;
 		    }
 
+		    /*Do the math for the every subpage*/
 		    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
 		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
 		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
@@ -210,36 +218,64 @@ void thermal_imaging_task(void *param)
 		    		}
 		    		thermal_image[x] = iron_map[iron_map_index];
 		    	}
+
+		    	cyhal_gpio_toggle(LED1);
+		    	/*POSLEFT*/
+		    	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+		    	cyhal_uart_putc(&ardu_uart, POSLEFT & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, (POSLEFT >> 16) & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+		    	/*POSTOP*/
+		    	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+		    	cyhal_uart_putc(&ardu_uart, POSTOP & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, (POSTOP >> 16) & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+		    	/*Draw the thermal image*/
+		    	position = 0;
+		    	for(y = 0; y < 24; y++)
+		    	{
+		    		for(x = 0; x < 32; x++)
+		    		{
+				    	/*Send if data changes*/
+		    			if(thermal_image[position] != thermal_cache[position])
+		    			{
+					    	cyhal_uart_putc(&ardu_uart, x);
+					    	cyhal_uart_putc(&ardu_uart, y);
+					    	cyhal_uart_putc(&ardu_uart, 0x20);
+					    	cyhal_uart_putc(&ardu_uart, thermal_image[position]);
+					    	thermal_cache[position] = thermal_image[position];
+		    			}
+				    	position++;
+
+				    	/*Check if a display data buffer is now overflowing*/
+				    	result = cyhal_uart_readable(&ardu_uart);
+				        if (result > 0)
+				        {
+				        	cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
+				        	if(byte == 0xFF)
+				        	{
+				        		/*Wait for ready signal with a timeout*/
+				        		for(uint8_t j = 0; j < BUFF_OVF_TOUT_MS; j++)
+				        		{
+				        			vTaskDelay(pdMS_TO_TICKS(1));
+				        			result = cyhal_uart_readable(&ardu_uart);
+				        			if (result > 0)
+				        			{
+				        				cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
+				        			}
+				        			if(byte == 0xFE)
+				        			{
+				        				break;
+				        			}
+				        		}
+				        	}
+				        }
+		    		}
+		    	}
 		    }
-
-	    	cyhal_gpio_toggle(LED1);
-	    	/*POSLEFT*/
-	    	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
-	    	cyhal_uart_putc(&ardu_uart, POSLEFT & 0xFF);
-	    	cyhal_uart_putc(&ardu_uart, (POSLEFT >> 16) & 0xFF);
-	    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
-
-	    	/*POSTOP*/
-	    	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
-	    	cyhal_uart_putc(&ardu_uart, POSTOP & 0xFF);
-	    	cyhal_uart_putc(&ardu_uart, (POSTOP >> 16) & 0xFF);
-	    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
-
-	    	position = 0;
-	    	for(y = 0; y < 24; y++)
-	    	{
-	    		for(x = 0; x < 32; x++)
-	    		{
-			    	/**/
-			    	cyhal_uart_putc(&ardu_uart, x);
-			    	cyhal_uart_putc(&ardu_uart, y);
-			    	cyhal_uart_putc(&ardu_uart, 0x20);
-			    	cyhal_uart_putc(&ardu_uart, thermal_image[position]);
-			    	position++;
-	    		}
-	    	}
 		}
-
 	}
 }
 
