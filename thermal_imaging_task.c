@@ -196,6 +196,7 @@ void thermal_imaging_task(void *param)
 		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
 		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
 		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
+		    //MLX90640_GetImage(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.mlx90640To);
 
 		    /*Calculate & Convert Colour Scale*/
 		    if(mlx90640.subpage == 1)
@@ -348,7 +349,7 @@ int MLX90640_I2CWrite(uint8_t slaveAddr,uint16_t writeAddress, uint16_t data)
     if (result != CY_RSLT_SUCCESS)
     {
     	xSemaphoreGive(i2c_mutex);
-    	return MLX90640_I2C_NACK_ERROR;
+    	return -MLX90640_I2C_NACK_ERROR;
     }
 
     xSemaphoreGive(i2c_mutex);
@@ -373,15 +374,15 @@ int MLX90640_I2CRead(uint8_t slaveAddr,uint16_t startAddress, uint16_t nMemAddre
     if (result != CY_RSLT_SUCCESS)
     {
     	xSemaphoreGive(i2c_mutex);
-    	return MLX90640_I2C_NACK_ERROR;
+    	return -MLX90640_I2C_NACK_ERROR;
     }
 
     /*Read the data*/
-	result = (int8_t)cyhal_i2c_master_read(&I2C_scb3,(uint16_t)slaveAddr, (uint8_t *)data, nMemAddressRead*2, 100, true);
+	result = (int8_t)cyhal_i2c_master_read(&I2C_scb3,(uint16_t)slaveAddr, (uint8_t *)data, nMemAddressRead*2, 10, true);
 	if (result != CY_RSLT_SUCCESS)
 	{
 		xSemaphoreGive(i2c_mutex);
-		 return MLX90640_I2C_NACK_ERROR;
+		 return -MLX90640_I2C_NACK_ERROR;
 	}
 
 	xSemaphoreGive(i2c_mutex);
