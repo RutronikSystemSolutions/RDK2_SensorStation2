@@ -23,7 +23,7 @@
 #define MLX_EEPROM_SIZE		1664
 #define MLX_PIXELS			768
 #define TA_SHIFT 			8
-#define STARTUP_DELAY_MS	80
+#define STARTUP_DELAY_MS	500
 
 /*MLX90640 Refresh Rate Selector*/
 #define MLX_RATE_SELECT_4HZ

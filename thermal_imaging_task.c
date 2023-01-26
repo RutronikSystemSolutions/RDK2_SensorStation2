@@ -14,8 +14,11 @@
 /* Set baud rate to special 1093750 */
 #define ARDU_BAUD_RATE       		1093750
 
-#define POSLEFT						32
-#define POSTOP						28
+#define TH_IMG_POSLEFT				150
+#define TH_IMG_POSTOP				50
+
+#define RULER_POSLEFT				100
+#define RULER_POSTOP				70
 
 #define DUMMY_CMD					0
 #define COLOUR_CMD					249
@@ -52,6 +55,31 @@ uint8_t iron_map[] =
 		0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
 };
 
+/*Colour Ruler LUT*/
+uint8_t ruler_map[] =
+{
+		0xff,0xff,0xff,0xff,
+		0xfe,0xfe,0xfe,0xfe,
+		0xfd,0xfd,0xfd,0xfd,
+		0xfc,0xfc,0xfc,0xfc,
+		0xf8,0xf8,0xf8,0xf8,
+		0xf4,0xf4,0xf4,0xf4,
+		0xf0,0xf0,0xf0,0xf0,
+		0xec,0xec,0xec,0xec,
+		0xc8,0xc8,0xc8,0xe8,
+		0xe4,0xe4,0xe4,0xe4,
+		0xc5,0xc5,0xc5,0xc5,
+		0xc1,0xc1,0xc1,0xc1,
+		0xc2,0xc2,0xc2,0xc2,
+		0xa2,0xa2,0xa2,0xa2,
+		0x82,0x82,0x82,0x82,
+		0x62,0x62,0x62,0x62,
+		0x42,0x42,0x42,0x42,
+		0x22,0x22,0x22,0x22,
+		0x01,0x01,0x01,0x01,
+        0x00,0x00,0x00,0x00
+};
+
 /*Thermal image*/
 uint8_t thermal_image[THERMAL_SENSORS] = {0};
 uint8_t thermal_cache[THERMAL_SENSORS] = {0};
@@ -76,6 +104,7 @@ cyhal_uart_t ardu_uart;
 /*Function prototypes*/
 void ResetDisplay(void);
 cy_rslt_t ardu_uart_init(void);
+void DrawStaticDisplay(void);
 
 void thermal_imaging_task(void *param)
 {
@@ -160,6 +189,20 @@ void thermal_imaging_task(void *param)
 	/*POR Delay*/
 	vTaskDelay(pdMS_TO_TICKS(STARTUP_DELAY_MS));
 
+	/*
+	for(;;)
+	{
+		cyhal_uart_putc(&ardu_uart, 0x00);
+		cyhal_uart_putc(&ardu_uart, 0x00);
+		cyhal_uart_putc(&ardu_uart, '9');
+		cyhal_uart_putc(&ardu_uart, 0x00);
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+	*/
+
+	/**/
+	DrawStaticDisplay();
+
 	for(;;)
 	{
 		/*Read the data and do the math*/
@@ -223,14 +266,14 @@ void thermal_imaging_task(void *param)
 		    	cyhal_gpio_toggle(LED1);
 		    	/*POSLEFT*/
 		    	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
-		    	cyhal_uart_putc(&ardu_uart, POSLEFT & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, (POSLEFT >> 16) & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, TH_IMG_POSLEFT & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSLEFT >> 16) & 0xFF);
 		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 		    	/*POSTOP*/
 		    	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
-		    	cyhal_uart_putc(&ardu_uart, POSTOP & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, (POSTOP >> 16) & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, TH_IMG_POSTOP & 0xFF);
+		    	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSTOP >> 16) & 0xFF);
 		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 		    	/*Draw the thermal image*/
@@ -433,5 +476,35 @@ void ResetDisplay(void)
 	vTaskDelay(pdMS_TO_TICKS(500));
 	cyhal_gpio_write(ARDU_IO8, true);
 	vTaskDelay(pdMS_TO_TICKS(3000));
+}
+
+void DrawStaticDisplay(void)
+{
+	int x=0, y=0;
+	uint32_t position = 0;
+
+	/*RULER*/
+	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+	cyhal_uart_putc(&ardu_uart, RULER_POSTOP & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+	/*Draw the ruler image*/
+	position = 0;
+	for(y = 0; y < 20; y++)
+	{
+		for(x = 0; x < 4; x++)
+		{
+	    	cyhal_uart_putc(&ardu_uart, x);
+	    	cyhal_uart_putc(&ardu_uart, y);
+	    	cyhal_uart_putc(&ardu_uart, 0x20);
+	    	cyhal_uart_putc(&ardu_uart, ruler_map[position]);
+	    	position++;
+		}
+	}
 }
 
