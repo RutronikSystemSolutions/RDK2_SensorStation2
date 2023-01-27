@@ -10,75 +10,8 @@
 #include <stdio.h>
 #include "thermal_imaging_task.h"
 #include "arm_math.h"
-
-/* Set baud rate to special 1093750 */
-#define ARDU_BAUD_RATE       		1093750
-
-#define TH_IMG_POSLEFT				150
-#define TH_IMG_POSTOP				50
-
-#define RULER_POSLEFT				100
-#define RULER_POSTOP				70
-
-#define DUMMY_CMD					0
-#define COLOUR_CMD					249
-#define POSLEFT_CMD					251
-#define POSTOP_CMD					252
-
-#define BITS_UINT8					255
-#define THERMAL_SENSORS				768
-
-#define BUFF_OVF_TOUT_MS			100
-
-/*"Iron map" scale LUT*/
-uint8_t iron_map[] =
-{
-		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-		0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
-		0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,
-		0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,
-		0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,0x62,
-		0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,
-		0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,0xa2,
-		0xc2,0xc2,0xc2,0xc2,0xc2,0xc2,
-		0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,0xc1,
-		0xc5,0xc5,0xc5,0xc5,0xc5,0xc5,0xc5,
-		0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4, 0xe4,
-		0xc8,0xc8,0xc8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,0xe8,
-		0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,0xec,
-		0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,0xf0,
-		0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,0xf4,
-		0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,0xf8,
-		0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,0xfc,
-		0xfd,0xfd,0xfd,0xfd,0xfd,0xfd,0xfd,0xfd,
-		0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,0xfe,
-		0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
-};
-
-/*Colour Ruler LUT*/
-uint8_t ruler_map[] =
-{
-		0xff,0xff,0xff,0xff,
-		0xfe,0xfe,0xfe,0xfe,
-		0xfd,0xfd,0xfd,0xfd,
-		0xfc,0xfc,0xfc,0xfc,
-		0xf8,0xf8,0xf8,0xf8,
-		0xf4,0xf4,0xf4,0xf4,
-		0xf0,0xf0,0xf0,0xf0,
-		0xec,0xec,0xec,0xec,
-		0xc8,0xc8,0xc8,0xe8,
-		0xe4,0xe4,0xe4,0xe4,
-		0xc5,0xc5,0xc5,0xc5,
-		0xc1,0xc1,0xc1,0xc1,
-		0xc2,0xc2,0xc2,0xc2,
-		0xa2,0xa2,0xa2,0xa2,
-		0x82,0x82,0x82,0x82,
-		0x62,0x62,0x62,0x62,
-		0x42,0x42,0x42,0x42,
-		0x22,0x22,0x22,0x22,
-		0x01,0x01,0x01,0x01,
-        0x00,0x00,0x00,0x00
-};
+#include "gesture_control_task.h"
+#include "image_lut.h"
 
 /*Thermal image*/
 uint8_t thermal_image[THERMAL_SENSORS] = {0};
@@ -101,12 +34,16 @@ thermal_image_t mlx90640 =
 /*Arduino UART object and configuration*/
 cyhal_uart_t ardu_uart;
 
+/*Imported gesture control data*/
+extern gesture_data_t gesture_data;
+
 /*Function prototypes*/
 void ResetDisplay(void);
 cy_rslt_t ardu_uart_init(void);
 void DrawStaticDisplay(void);
 void DrawThermalImage(void);
 void DrawTemperatures(void);
+void DrawChevrons(void);
 
 void thermal_imaging_task(void *param)
 {
@@ -121,6 +58,7 @@ void thermal_imaging_task(void *param)
 	float scale_unit = 0;
 	float thermal_diff = 0;
 	int32_t iron_map_index = 0;
+	uint32_t ticks = 0;
 
 	printf("thermal imaging task has started.\r\n");
 
@@ -193,68 +131,76 @@ void thermal_imaging_task(void *param)
 		for (uint8_t i = 0 ; i < 2 ; i++)
 		{
 			/*Delay determined by the refresh rate*/
-			vTaskDelay(pdMS_TO_TICKS(1000/MLX_DELAY_DIV));
+			vTaskDelay(pdMS_TO_TICKS(1));
 
-			frame_check:
-		    status = MLX90640_GetFrameData(MLX90640_ADDR, mlx90640.mlx90640Frame);
-		    if(status == 0)
-		    {
-		    	/*Subpage 0 data*/
-		    	//cyhal_gpio_toggle(LED1);
-		    	mlx90640.subpage = status;
-		    }
-		    else if(status == 1)
-		    {
+			if(ticks >= (pdMS_TO_TICKS(1000/MLX_DELAY_DIV)))
+			{
+				ticks = 0;
 
-		    	/*Subpage 1 data*/
-		    	//cyhal_gpio_toggle(LED1);
-		    	mlx90640.subpage = status;
-		    }
-		    else
-		    {
-		    	/*Error*/
-		    	cyhal_gpio_write((cyhal_gpio_t)LED1, CYBSP_LED_STATE_OFF);
-		    	vTaskDelay(pdMS_TO_TICKS(10));
-		    	goto frame_check;
-		    }
+				frame_check:
+			    status = MLX90640_GetFrameData(MLX90640_ADDR, mlx90640.mlx90640Frame);
+			    if(status == 0)
+			    {
+			    	/*Subpage 0 data*/
+			    	mlx90640.subpage = status;
+			    }
+			    else if(status == 1)
+			    {
 
-		    /*Do the math for the every subpage*/
-		    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
-		    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
-		    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
-		    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
-		    //MLX90640_GetImage(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.mlx90640To);
+			    	/*Subpage 1 data*/
+			    	mlx90640.subpage = status;
+			    }
+			    else
+			    {
+			    	/*Error*/
+			    	cyhal_gpio_write((cyhal_gpio_t)LED1, CYBSP_LED_STATE_OFF);
+			    	vTaskDelay(pdMS_TO_TICKS(10));
+			    	goto frame_check;
+			    }
 
-		    /*Calculate & Convert Colour Scale*/
-		    if(mlx90640.subpage == 1)
-		    {
-		    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.max_temp, &max_temp_index);
-		    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.min_temp, &min_temp_index);
-		    	scale_unit = (mlx90640.max_temp - mlx90640.min_temp)/BITS_UINT8;
+			    /*Do the math for the every subpage*/
+			    mlx90640.vdd = MLX90640_GetVdd(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
+			    mlx90640.Ta = MLX90640_GetTa(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config);
+			    mlx90640.tr = mlx90640.Ta - TA_SHIFT; //Reflected temperature based on the sensor ambient temperature
+			    MLX90640_CalculateTo(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.emissivity, mlx90640.tr, mlx90640.mlx90640To);
+			    //MLX90640_GetImage(mlx90640.mlx90640Frame, &mlx90640.mlx90640Config, mlx90640.mlx90640To);
 
-		    	for(x = 0; x < THERMAL_SENSORS; x++)
-		    	{
-		    		thermal_diff = mlx90640.mlx90640To[x] - mlx90640.min_temp;
-		    		iron_map_index = thermal_diff/scale_unit - 1;
-		    		if(iron_map_index < 0)
-		    		{
-		    			iron_map_index = 0;
-		    		}
-		    		else if(iron_map_index > 254)
-		    		{
-		    			iron_map_index = 254;
-		    		}
-		    		thermal_image[x] = iron_map[iron_map_index];
-		    	}
+			    /*Calculate & Convert Colour Scale*/
+			    if(mlx90640.subpage == 1)
+			    {
+			    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.max_temp, &max_temp_index);
+			    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.min_temp, &min_temp_index);
+			    	scale_unit = (mlx90640.max_temp - mlx90640.min_temp)/BITS_UINT8;
 
-		    	cyhal_gpio_toggle(LED1);
+			    	for(x = 0; x < THERMAL_SENSORS; x++)
+			    	{
+			    		thermal_diff = mlx90640.mlx90640To[x] - mlx90640.min_temp;
+			    		iron_map_index = thermal_diff/scale_unit - 1;
+			    		if(iron_map_index < 0)
+			    		{
+			    			iron_map_index = 0;
+			    		}
+			    		else if(iron_map_index > 254)
+			    		{
+			    			iron_map_index = 254;
+			    		}
+			    		thermal_image[x] = iron_map[iron_map_index];
+			    	}
 
-		    	/**/
-		    	DrawThermalImage();
+			    	cyhal_gpio_toggle(LED1);
 
-			    /**/
-			    DrawTemperatures();
-		    }
+			    	/*Draw a Thermal Image*/
+			    	DrawThermalImage();
+
+				    /*Draw Min/Max Temperatures*/
+				    DrawTemperatures();
+			    }
+
+			}
+
+		    /*Draw the Gestures*/
+		    DrawChevrons();
+		    ticks++;
 		}
 	}
 }
@@ -422,11 +368,11 @@ void DrawStaticDisplay(void)
 	/*RULER*/
 	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
 	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
 	cyhal_uart_putc(&ardu_uart, RULER_POSTOP & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 	/*Draw the ruler image*/
@@ -454,13 +400,13 @@ void DrawThermalImage(void)
 	/*POSLEFT*/
 	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
 	cyhal_uart_putc(&ardu_uart, TH_IMG_POSLEFT & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSLEFT >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 	/*POSTOP*/
 	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
 	cyhal_uart_putc(&ardu_uart, TH_IMG_POSTOP & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSTOP >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSTOP >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 	/*Draw the thermal image*/
@@ -515,11 +461,11 @@ void DrawTemperatures(void)
 	/*Set the position above the ruler*/
 	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
 	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
 	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP-10) & 0xFF);
-	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP-10) >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP-10) >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 	/*Convert maximum temperature to string*/
@@ -559,11 +505,11 @@ void DrawTemperatures(void)
 	/*Set the position below the ruler*/
 	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
 	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
-	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
 	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP+160) & 0xFF);
-	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP+160) >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP+160) >> 8) & 0xFF);
 	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
 	/*Convert maximum temperature to string*/
@@ -600,5 +546,234 @@ void DrawTemperatures(void)
 	cyhal_uart_putc(&ardu_uart, 0);
 	cyhal_uart_putc(&ardu_uart, 'C');
 	cyhal_uart_putc(&ardu_uart, 0x00);
+}
+
+void DrawChevrons(void)
+{
+	int x=0, y=0;
+	uint32_t position = 0;
+	static uint8_t current_gesture = GESTURE_NONE;
+
+	if(current_gesture != gesture_data.gesture)
+	{
+		current_gesture = (uint8_t)gesture_data.gesture;
+
+		switch (current_gesture)
+		{
+			case GESTURE_RIGHT:
+			{
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVRIGHT_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVRIGHT_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVRIGHT_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVRIGHT_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 7; y++)
+				{
+					for(x = 0; x < 4; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, chev_right[position]);
+				    	position++;
+					}
+				}
+				break;
+			}
+
+			case GESTURE_LEFT:
+			{
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVLEFT_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVLEFT_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVLEFT_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVLEFT_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 7; y++)
+				{
+					for(x = 0; x < 4; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, chev_left[position]);
+				    	position++;
+					}
+				}
+				break;
+			}
+
+			case GESTURE_UP:
+			{
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVUP_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVUP_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, (CHEVUP_POSTOP) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, ((CHEVUP_POSTOP) >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 4; y++)
+				{
+					for(x = 0; x < 7; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, chev_up[position]);
+				    	position++;
+					}
+				}
+				break;
+			}
+
+			case GESTURE_DOWN:
+			{
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVDOWN_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVDOWN_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVDOWN_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVDOWN_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 4; y++)
+				{
+					for(x = 0; x < 7; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, chev_down[position]);
+				    	position++;
+					}
+				}
+				break;
+			}
+
+			case GESTURE_NONE:
+			{
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVUP_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVUP_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, (CHEVUP_POSTOP) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, ((CHEVUP_POSTOP) >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 4; y++)
+				{
+					for(x = 0; x < 7; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, 0x00);
+				    	position++;
+					}
+				}
+
+
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVDOWN_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVDOWN_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVDOWN_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVDOWN_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 4; y++)
+				{
+					for(x = 0; x < 7; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, 0x00);
+				    	position++;
+					}
+				}
+
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVLEFT_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVLEFT_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVLEFT_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVLEFT_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 7; y++)
+				{
+					for(x = 0; x < 4; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, 0x00);
+				    	position++;
+					}
+				}
+
+				/*Set the chevron position*/
+				cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVRIGHT_POSLEFT & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVRIGHT_POSLEFT >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+				cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+				cyhal_uart_putc(&ardu_uart, CHEVRIGHT_POSTOP & 0xFF);
+				cyhal_uart_putc(&ardu_uart, (CHEVRIGHT_POSTOP >> 8) & 0xFF);
+				cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+				/**/
+				position = 0;
+				for(y = 0; y < 7; y++)
+				{
+					for(x = 0; x < 4; x++)
+					{
+				    	cyhal_uart_putc(&ardu_uart, x);
+				    	cyhal_uart_putc(&ardu_uart, y);
+				    	cyhal_uart_putc(&ardu_uart, 0x20);
+				    	cyhal_uart_putc(&ardu_uart, 0x00);
+				    	position++;
+					}
+				}
+				break;
+			}
+		}
+
+	}
 }
 

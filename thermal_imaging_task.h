@@ -60,6 +60,37 @@
 #define MLX_DELAY_DIV		64
 #endif
 
+/* Set baud rate to special 1093750 */
+#define ARDU_BAUD_RATE       		1093750
+
+#define TH_IMG_POSLEFT				UINT16_C (150)
+#define TH_IMG_POSTOP				UINT16_C (60)
+
+#define RULER_POSLEFT				UINT16_C (100)
+#define RULER_POSTOP				UINT16_C (80)
+
+#define CHEVUP_POSLEFT				UINT16_C (200)
+#define CHEVUP_POSTOP				UINT16_C (10)
+
+#define CHEVDOWN_POSLEFT			UINT16_C (200)
+#define CHEVDOWN_POSTOP				UINT16_C (275)
+
+#define CHEVRIGHT_POSLEFT			UINT16_C (430)
+#define CHEVRIGHT_POSTOP			UINT16_C (130)
+
+#define CHEVLEFT_POSLEFT			UINT16_C (35)
+#define CHEVLEFT_POSTOP				UINT16_C (130)
+
+#define DUMMY_CMD					0
+#define COLOUR_CMD					249
+#define POSLEFT_CMD					251
+#define POSTOP_CMD					252
+
+#define BITS_UINT8					UINT8_C  (255)
+#define THERMAL_SENSORS				UINT16_C (768)
+
+#define BUFF_OVF_TOUT_MS			100
+
 typedef struct thermal_image_data
 {
 	paramsMLX90640 mlx90640Config;
@@ -71,6 +102,7 @@ typedef struct thermal_image_data
 	float emissivity;
 	uint8_t subpage;
 	uint16_t device_id[3];
+
 	float max_temp;
 	float min_temp;
 
