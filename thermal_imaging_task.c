@@ -105,6 +105,8 @@ cyhal_uart_t ardu_uart;
 void ResetDisplay(void);
 cy_rslt_t ardu_uart_init(void);
 void DrawStaticDisplay(void);
+void DrawThermalImage(void);
+void DrawTemperatures(void);
 
 void thermal_imaging_task(void *param)
 {
@@ -113,19 +115,12 @@ void thermal_imaging_task(void *param)
 	int err = MLX90640_NO_ERROR;
 	int status = MLX90640_NO_ERROR;
 	uint16_t *eeMLX90640 = NULL;
-	int x=0, y=0;
-	uint32_t position = 0;
-
-	float max_temp = 0;
+	int x=0;
 	uint32_t max_temp_index = 0;
-	float min_temp = 0;
 	uint32_t min_temp_index = 0;
-
 	float scale_unit = 0;
 	float thermal_diff = 0;
 	int32_t iron_map_index = 0;
-
-	uint8_t byte;
 
 	printf("thermal imaging task has started.\r\n");
 
@@ -189,17 +184,6 @@ void thermal_imaging_task(void *param)
 	/*POR Delay*/
 	vTaskDelay(pdMS_TO_TICKS(STARTUP_DELAY_MS));
 
-	/*
-	for(;;)
-	{
-		cyhal_uart_putc(&ardu_uart, 0x00);
-		cyhal_uart_putc(&ardu_uart, 0x00);
-		cyhal_uart_putc(&ardu_uart, '9');
-		cyhal_uart_putc(&ardu_uart, 0x00);
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}
-	*/
-
 	/**/
 	DrawStaticDisplay();
 
@@ -244,13 +228,13 @@ void thermal_imaging_task(void *param)
 		    /*Calculate & Convert Colour Scale*/
 		    if(mlx90640.subpage == 1)
 		    {
-		    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &max_temp, &max_temp_index);
-		    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &min_temp, &min_temp_index);
-		    	scale_unit = (max_temp - min_temp)/BITS_UINT8;
+		    	arm_max_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.max_temp, &max_temp_index);
+		    	arm_min_f32(mlx90640.mlx90640To, MLX_PIXELS, &mlx90640.min_temp, &min_temp_index);
+		    	scale_unit = (mlx90640.max_temp - mlx90640.min_temp)/BITS_UINT8;
 
 		    	for(x = 0; x < THERMAL_SENSORS; x++)
 		    	{
-		    		thermal_diff = mlx90640.mlx90640To[x] - min_temp;
+		    		thermal_diff = mlx90640.mlx90640To[x] - mlx90640.min_temp;
 		    		iron_map_index = thermal_diff/scale_unit - 1;
 		    		if(iron_map_index < 0)
 		    		{
@@ -264,60 +248,12 @@ void thermal_imaging_task(void *param)
 		    	}
 
 		    	cyhal_gpio_toggle(LED1);
-		    	/*POSLEFT*/
-		    	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
-		    	cyhal_uart_putc(&ardu_uart, TH_IMG_POSLEFT & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSLEFT >> 16) & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
 
-		    	/*POSTOP*/
-		    	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
-		    	cyhal_uart_putc(&ardu_uart, TH_IMG_POSTOP & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSTOP >> 16) & 0xFF);
-		    	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+		    	/**/
+		    	DrawThermalImage();
 
-		    	/*Draw the thermal image*/
-		    	position = 0;
-		    	for(y = 0; y < 24; y++)
-		    	{
-		    		for(x = 0; x < 32; x++)
-		    		{
-				    	/*Send if data changes*/
-		    			if(thermal_image[position] != thermal_cache[position])
-		    			{
-					    	cyhal_uart_putc(&ardu_uart, x);
-					    	cyhal_uart_putc(&ardu_uart, y);
-					    	cyhal_uart_putc(&ardu_uart, 0x20);
-					    	cyhal_uart_putc(&ardu_uart, thermal_image[position]);
-					    	thermal_cache[position] = thermal_image[position];
-		    			}
-				    	position++;
-
-				    	/*Check if a display data buffer is now overflowing*/
-				    	result = cyhal_uart_readable(&ardu_uart);
-				        if (result > 0)
-				        {
-				        	cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
-				        	if(byte == 0xFF)
-				        	{
-				        		/*Wait for ready signal with a timeout*/
-				        		for(uint8_t j = 0; j < BUFF_OVF_TOUT_MS; j++)
-				        		{
-				        			vTaskDelay(pdMS_TO_TICKS(1));
-				        			result = cyhal_uart_readable(&ardu_uart);
-				        			if (result > 0)
-				        			{
-				        				cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
-				        			}
-				        			if(byte == 0xFE)
-				        			{
-				        				break;
-				        			}
-				        		}
-				        	}
-				        }
-		    		}
-		    	}
+			    /**/
+			    DrawTemperatures();
 		    }
 		}
 	}
@@ -506,5 +442,163 @@ void DrawStaticDisplay(void)
 	    	position++;
 		}
 	}
+}
+
+void DrawThermalImage(void)
+{
+	cy_rslt_t result;
+	int x=0, y=0;
+	uint32_t position = 0;
+	uint8_t byte;
+
+	/*POSLEFT*/
+	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+	cyhal_uart_putc(&ardu_uart, TH_IMG_POSLEFT & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+	/*POSTOP*/
+	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+	cyhal_uart_putc(&ardu_uart, TH_IMG_POSTOP & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (TH_IMG_POSTOP >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+	/*Draw the thermal image*/
+	position = 0;
+	for(y = 0; y < 24; y++)
+	{
+		for(x = 0; x < 32; x++)
+		{
+	    	/*Send if data changes*/
+			if(thermal_image[position] != thermal_cache[position])
+			{
+		    	cyhal_uart_putc(&ardu_uart, x);
+		    	cyhal_uart_putc(&ardu_uart, y);
+		    	cyhal_uart_putc(&ardu_uart, 0x20);
+		    	cyhal_uart_putc(&ardu_uart, thermal_image[position]);
+		    	thermal_cache[position] = thermal_image[position];
+			}
+	    	position++;
+
+	    	/*Check if a display data buffer is now overflowing*/
+	    	result = cyhal_uart_readable(&ardu_uart);
+	        if (result > 0)
+	        {
+	        	cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
+	        	if(byte == 0xFF)
+	        	{
+	        		/*Wait for ready signal with a timeout*/
+	        		for(uint8_t j = 0; j < BUFF_OVF_TOUT_MS; j++)
+	        		{
+	        			vTaskDelay(pdMS_TO_TICKS(1));
+	        			result = cyhal_uart_readable(&ardu_uart);
+	        			if (result > 0)
+	        			{
+	        				cyhal_uart_getc(&ardu_uart, &byte,0xFFFFFFFF);
+	        			}
+	        			if(byte == 0xFE)
+	        			{
+	        				break;
+	        			}
+	        		}
+	        	}
+	        }
+		}
+	}
+}
+
+void DrawTemperatures(void)
+{
+	char temp[6] = {0};
+	uint8_t pos;
+
+	/*Set the position above the ruler*/
+	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP-10) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP-10) >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+	/*Convert maximum temperature to string*/
+	sprintf(temp, "%d", (int)mlx90640.max_temp);
+
+	/*Clean old data*/
+	for(pos = 0; pos < sizeof(temp); pos++)
+	{
+		cyhal_uart_putc(&ardu_uart, pos);
+		cyhal_uart_putc(&ardu_uart, 0);
+		cyhal_uart_putc(&ardu_uart, 0x20);
+		cyhal_uart_putc(&ardu_uart, 0x00);
+	}
+
+	/*Draw the maximum temperature*/
+	for(pos = 0; pos < strlen(temp); pos++)
+	{
+		cyhal_uart_putc(&ardu_uart, pos);
+		cyhal_uart_putc(&ardu_uart, 0);
+		cyhal_uart_putc(&ardu_uart, temp[pos]);
+		cyhal_uart_putc(&ardu_uart, 0x00);
+	}
+
+	/*Draw the degrees symbol*/
+	cyhal_uart_putc(&ardu_uart, pos);
+	cyhal_uart_putc(&ardu_uart, 0);
+	cyhal_uart_putc(&ardu_uart, 0xA1);
+	cyhal_uart_putc(&ardu_uart, 0x00);
+	pos++;
+
+	/*Draw the Celsius symbol*/
+	cyhal_uart_putc(&ardu_uart, pos);
+	cyhal_uart_putc(&ardu_uart, 0);
+	cyhal_uart_putc(&ardu_uart, 'C');
+	cyhal_uart_putc(&ardu_uart, 0x00);
+
+	/*Set the position below the ruler*/
+	cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+	cyhal_uart_putc(&ardu_uart, RULER_POSLEFT & 0xFF);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSLEFT >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+	cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+	cyhal_uart_putc(&ardu_uart, (RULER_POSTOP+160) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, ((RULER_POSTOP+160) >> 16) & 0xFF);
+	cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+	/*Convert maximum temperature to string*/
+	memset(temp, 0x00, sizeof(temp));
+	sprintf(temp, "%d", (int)mlx90640.min_temp);
+
+	/*Clean old data*/
+	for(pos = 0; pos < sizeof(temp); pos++)
+	{
+		cyhal_uart_putc(&ardu_uart, pos);
+		cyhal_uart_putc(&ardu_uart, 0);
+		cyhal_uart_putc(&ardu_uart, 0x20);
+		cyhal_uart_putc(&ardu_uart, 0x00);
+	}
+
+	/*Draw the mainimum temperature*/
+	for(pos = 0; pos < strlen(temp); pos++)
+	{
+		cyhal_uart_putc(&ardu_uart, pos);
+		cyhal_uart_putc(&ardu_uart, 0);
+		cyhal_uart_putc(&ardu_uart, temp[pos]);
+		cyhal_uart_putc(&ardu_uart, 0x00);
+	}
+
+	/*Draw the degrees symbol*/
+	cyhal_uart_putc(&ardu_uart, pos);
+	cyhal_uart_putc(&ardu_uart, 0);
+	cyhal_uart_putc(&ardu_uart, 0xA1);
+	cyhal_uart_putc(&ardu_uart, 0x00);
+	pos++;
+
+	/*Draw the Celsius symbol*/
+	cyhal_uart_putc(&ardu_uart, pos);
+	cyhal_uart_putc(&ardu_uart, 0);
+	cyhal_uart_putc(&ardu_uart, 'C');
+	cyhal_uart_putc(&ardu_uart, 0x00);
 }
 

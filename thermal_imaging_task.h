@@ -71,6 +71,8 @@ typedef struct thermal_image_data
 	float emissivity;
 	uint8_t subpage;
 	uint16_t device_id[3];
+	float max_temp;
+	float min_temp;
 
 }thermal_image_t;
 
