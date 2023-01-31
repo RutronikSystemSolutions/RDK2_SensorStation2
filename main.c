@@ -66,13 +66,13 @@
 /*Function prototypes*/
 void handle_error(void);
 
-void btn1_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event);
+void btn_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event);
 void btn2_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event);
 
 /*User Button 1 Interrupt Data*/
-cyhal_gpio_callback_data_t btn1_data =
+cyhal_gpio_callback_data_t btn_data =
 {
-		.callback = btn1_interrupt_handler,
+		.callback = btn_interrupt_handler,
 		.callback_arg = NULL,
 
 };
@@ -129,7 +129,7 @@ int main(void)
     if (result != CY_RSLT_SUCCESS)
     {handle_error();}
     /*Register callback functions */
-    cyhal_gpio_register_callback(USER_BTN1, &btn1_data);
+    cyhal_gpio_register_callback(USER_BTN1, &btn_data);
     cyhal_gpio_register_callback(USER_BTN2, &btn2_data);
     /* Enable falling edge interrupt events */
     cyhal_gpio_enable_event(USER_BTN1, CYHAL_GPIO_IRQ_FALL, BTN_IRQ_PRIORITY, true);
@@ -183,7 +183,7 @@ int main(void)
 }
 
 /* Interrupt handler callback function */
-void btn1_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event)
+void btn_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event)
 {
 	CY_UNUSED_PARAMETER(handler_arg);
     CY_UNUSED_PARAMETER(event);
