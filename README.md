@@ -1,6 +1,6 @@
 # Sensor Station 2 Application
 
-This is a demonstration of the sensors MLX90640 [thermal camera], VCNL4035X01 [gesture control], NJR4234K [millimeter wave radar] and the smart display GEN4-ULCD-35P4CT-CLB. Everything is connected to the main controller - RDK2 board.
+This is a demonstration of the sensors MLX90640 [thermal camera], VCNL4035X01 [gesture control], and the smart display GEN4-ULCD-35P4CT-CLB. Everything is connected to the main controller - **RDK2** board.
 
 ## Requirements
 
