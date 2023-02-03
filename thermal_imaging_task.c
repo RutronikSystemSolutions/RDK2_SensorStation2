@@ -12,6 +12,7 @@
 #include "arm_math.h"
 #include "gesture_control_task.h"
 #include "image_lut.h"
+#include "capsense_task.h"
 
 /*Thermal image*/
 uint8_t thermal_image[THERMAL_SENSORS] = {0};
@@ -44,6 +45,7 @@ void DrawStaticDisplay(void);
 void DrawThermalImage(void);
 void DrawTemperatures(void);
 void DrawChevrons(void);
+void DrawSlider(void);
 
 void thermal_imaging_task(void *param)
 {
@@ -122,7 +124,7 @@ void thermal_imaging_task(void *param)
 	/*POR Delay*/
 	vTaskDelay(pdMS_TO_TICKS(STARTUP_DELAY_MS));
 
-	/**/
+	/*Setup the display's environment*/
 	DrawStaticDisplay();
 
 	for(;;)
@@ -200,6 +202,11 @@ void thermal_imaging_task(void *param)
 
 		    /*Draw the Gestures*/
 		    DrawChevrons();
+
+		    /*Draw the Slider*/
+		    DrawSlider();
+
+		    /*Increase the counter*/
 		    ticks++;
 		}
 	}
@@ -774,6 +781,61 @@ void DrawChevrons(void)
 			}
 		}
 
+	}
+}
+
+void DrawSlider(void)
+{
+	uint32_t x=0;
+	uint32_t position = 0;
+	uint32_t last_position = 0;
+	static uint32_t current_slider = 0;
+
+	if(current_slider != slider_position)
+	{
+		current_slider = slider_position;
+
+		/*Set the slider position*/
+		cyhal_uart_putc(&ardu_uart, POSLEFT_CMD);
+		cyhal_uart_putc(&ardu_uart, SLIDER_POSLEFT & 0xFF);
+		cyhal_uart_putc(&ardu_uart, (SLIDER_POSLEFT >> 8) & 0xFF);
+		cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+		cyhal_uart_putc(&ardu_uart, POSTOP_CMD);
+		cyhal_uart_putc(&ardu_uart, SLIDER_POSTOP & 0xFF);
+		cyhal_uart_putc(&ardu_uart, (SLIDER_POSTOP >> 8) & 0xFF);
+		cyhal_uart_putc(&ardu_uart, DUMMY_CMD);
+
+		position = 0;
+		last_position = (uint32_t)(current_slider*SLIDER_LAST_POS/100);
+		for(x = 0; x < SLIDER_LAST_POS; x++)
+		{
+	    	cyhal_uart_putc(&ardu_uart, x);
+	    	cyhal_uart_putc(&ardu_uart, 0);
+	    	cyhal_uart_putc(&ardu_uart, 0x20);
+
+	    	if(position < last_position)
+	    	{
+	    		cyhal_uart_putc(&ardu_uart, 0x30);
+	    	}
+	    	else
+	    	{
+	    		cyhal_uart_putc(&ardu_uart, 0x00);
+	    	}
+
+	    	cyhal_uart_putc(&ardu_uart, x);
+	    	cyhal_uart_putc(&ardu_uart, 1);
+	    	cyhal_uart_putc(&ardu_uart, 0x20);
+
+	    	if(position < last_position)
+	    	{
+	    		cyhal_uart_putc(&ardu_uart, 0x30);
+	    	}
+	    	else
+	    	{
+	    		cyhal_uart_putc(&ardu_uart, 0x00);
+	    	}
+	    	position++;
+		}
 	}
 }
 

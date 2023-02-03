@@ -81,6 +81,10 @@
 #define CHEVLEFT_POSLEFT			UINT16_C (15)
 #define CHEVLEFT_POSTOP				UINT16_C (164)
 
+#define SLIDER_POSLEFT				UINT16_C (234)
+#define SLIDER_POSTOP				UINT16_C (32)
+#define SLIDER_LAST_POS				UINT8_C (16)
+
 #define DUMMY_CMD					0
 #define COLOUR_CMD					249
 #define POSLEFT_CMD					251

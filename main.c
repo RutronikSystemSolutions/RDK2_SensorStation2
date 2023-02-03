@@ -59,6 +59,7 @@
 #include "semphr.h"
 #include "thermal_imaging_task.h"
 #include "gesture_control_task.h"
+#include "capsense_task.h"
 
 /*Priority for button interrupts*/
 #define BTN_IRQ_PRIORITY		5
@@ -167,8 +168,16 @@ int main(void)
     	handle_error();
     }
 
+    /* Create a CapSense task. */
+    xTaskCreate(capsense_task, "capsense task", configMINIMAL_STACK_SIZE*4, NULL, configMAX_PRIORITIES - 2, &capsense_task_handle);
+    if(capsense_task_handle == NULL)
+    {
+    	printf("Error: could not create a capsense task.\r\n");
+    	handle_error();
+    }
+
     /* Create a gesture control task. */
-    xTaskCreate(gesture_control_task, "gesture task", configMINIMAL_STACK_SIZE*8, NULL, configMAX_PRIORITIES - 2, &gesture_control_task_handle);
+    xTaskCreate(gesture_control_task, "gesture task", configMINIMAL_STACK_SIZE*8, NULL, configMAX_PRIORITIES - 1, &gesture_control_task_handle);
     if(gesture_control_task_handle == NULL)
     {
     	printf("Error: could not create a gesture control task.\r\n");
