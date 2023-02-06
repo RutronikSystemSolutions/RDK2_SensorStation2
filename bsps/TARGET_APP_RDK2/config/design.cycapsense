@@ -5,10 +5,10 @@
         <Property id="DEVICE_TYPE" value="P6_CSDV2"/>
     </DesignProperties>
     <GeneralProperties>
-        <Property id="REGULAR_RC_IIR_FILTER_EN" value="false"/>
+        <Property id="REGULAR_RC_IIR_FILTER_EN" value="true"/>
         <Property id="REGULAR_IIR_RC_N" value="128"/>
-        <Property id="REGULAR_RC_MEDIAN_FILTER_EN" value="false"/>
-        <Property id="REGULAR_RC_AVERAGE_FILTER_EN" value="false"/>
+        <Property id="REGULAR_RC_MEDIAN_FILTER_EN" value="true"/>
+        <Property id="REGULAR_RC_AVERAGE_FILTER_EN" value="true"/>
         <Property id="REGULAR_RC_AVERAGE_SAMPLE_SIZE" value="SAMPLE_4"/>
         <Property id="PROX_RC_IIR_FILTER_EN" value="false"/>
         <Property id="PROX_IIR_RC_N" value="128"/>
